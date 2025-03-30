@@ -1,9 +1,10 @@
 
-## Solana Fee Report Script
+## Solana Fee Report: Compute Unit Price, Rewards
 
-A Node.js script to analyze Solana transaction fees and compute units. This script fetches blocks from the Solana blockchain, calculates priority fees, and generates reports in either a SQLite3 database or a CSV file.
+A Node.js script to analyze Solana transaction fees and compute units. This script fetches blocks from the Solana blockchain, calculates priority fees, and generates reports in a CSV file.
 
 ---
+The data structure of the Solana JSON RPC can be found here (https://solana.com/docs/rpc/json-structures#transactions). 
 
 ## Features
 
@@ -67,31 +68,9 @@ node solana-fee-report.js -n <numSamples> -s <storage> -b <batchSize> -d <delay>
 
 ---
 
-## Output
-
-### SQLite3 Database
-If the `-s db` option is used, the script will create a SQLite3 database file named `solana_data.db` with the following schema:
-
-```sql
-CREATE TABLE block_data (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    start_slot INTEGER,
-    end_slot INTEGER,
-    total_transactions INTEGER,
-    average_tps REAL,
-    max_fee_sol REAL,
-    average_fee_sol REAL,
-    median_fee_sol REAL,
-    percentile95_fee_sol REAL,
-    max_cu INTEGER,
-    average_cu REAL,
-    median_cu INTEGER,
-    sol_price_usd REAL
-);
-```
 
 ### CSV File
-If the `-s csv` option is used, the script will create a CSV file named `solana_data.csv` with the following columns:
+The script will create a CSV file named `solana_data.csv` with the following columns:
 
 ```
 start_slot,end_slot,total_transactions,average_tps,max_fee_sol,average_fee_sol,median_fee_sol,percentile95_fee_sol,max_cu,average_cu,median_cu,sol_price_usd
@@ -111,12 +90,6 @@ start_slot,end_slot,total_transactions,average_tps,max_fee_sol,average_fee_sol,m
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request.
 
 ---
 
