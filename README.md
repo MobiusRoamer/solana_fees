@@ -16,6 +16,10 @@ The data structure of the Solana JSON RPC can be found here (https://solana.com/
 
 ---
 
+## Some Questions Answered using the Report
+- **What was the compute unit price for executed / successful transactions?**
+- **What was the rewards received by each leader?**
+
 ## Installation
 
 1. Clone the repository:
