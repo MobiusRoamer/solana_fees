@@ -74,7 +74,7 @@ if (isNaN(delay) || delay < 0) {
 
 
 // Initialize CSV file (no sqlite3)
-const csvHeader = "start_slot,end_slot,total_transactions,average_tps,max_fee_sol,average_fee_sol,median_fee_sol,max_cu,average_cu,median_cu,cup_success,block_rewards,seigniorage,sol_price_usd\n";
+const csvHeader = "start_slot,end_slot,total_transactions,avg_tps,max_fee_sol,avg_fee_sol,median_fee_sol,max_cu,avg_cu,median_cu,avg_cu_success,cup_success,avg_block_rewards,avg_seigniorage,sol_price_usd\n";
 //need to delete: percentiles95_fee_sol
 fs.writeFileSync("solana_data.csv", csvHeader); // Creates or overwrites the CSV with headers
 
@@ -130,10 +130,11 @@ function printReport(
     maxCU,
     averageCU,
     medianCU,
+    averageSuccessCU,
     ComputeUnitPrice,
     ComputeUnitPriceSuccess,
-    blockRewards,
-    seigniorage,
+    averageBlockRewards,
+    averageSeigniorage,
     solPriceUSD
 ) {
     console.log(`\n--- Report for Slots ${startSlot} to ${endSlot} ---`);
@@ -145,11 +146,12 @@ function printReport(
     console.log(`Max Compute Units (CU): ${maxCU}`);
     console.log(`Average Compute Units (CU): ${averageCU.toFixed(2)}`);
     console.log(`Median Compute Units (CU): ${medianCU}`);
+    console.log(`Average Compute Units of Successful Tx (CU): ${averageSuccessCU}`);
     console.log(`Compute Unit Price of all Tx (SOL): ${ComputeUnitPrice}`);
     console.log(`Compute Unit Price of Successful Tx (SOL): ${ComputeUnitPriceSuccess}`);
-    console.log(`Block Rewards (SOL): ${blockRewards}`);
-    console.log(`Seigniorage (SOL): ${seigniorage}`);
-    console.log(`Solana Price (USD): $${solPriceUSD.toFixed(2)}`);
+    console.log(`Average Block Rewards (SOL): ${averageBlockRewards}`);
+    console.log(`Average Seigniorage (SOL): ${averageSeigniorage}`);
+    console.log(`Solana Price (USD): ${solPriceUSD.toFixed(2)}`);
     console.log("--------------------------------------------\n");
 }
 
@@ -165,13 +167,14 @@ function saveData(
     maxCU,
     averageCU,
     medianCU,
+    averageSuccessCU,
     ComputeUnitPrice,
     ComputeUnitPriceSuccess,
-    blockRewards,
-    seigniorage,
+    averageBlockRewards,
+    averageSeigniorage,
     solPriceUSD
 ) {
-    const csvRow = `${startSlot},${endSlot},${totalTransactions},${averageTPS},${maxFee},${averageFee},${medianFee},${maxCU},${averageCU},${medianCU},${ComputeUnitPrice},${ComputeUnitPriceSuccess},${blockRewards},${seigniorage},${solPriceUSD}\n`;
+    const csvRow = `${startSlot},${endSlot},${totalTransactions},${averageTPS},${maxFee},${averageFee},${medianFee},${maxCU},${averageCU},${medianCU},${averageSuccessCU},${ComputeUnitPrice},${ComputeUnitPriceSuccess},${averageBlockRewards},${averageSeigniorage},${solPriceUSD}\n`;
     fs.appendFileSync("solana_data.csv", csvRow);
     console.log(`Data for slots ${startSlot} to ${endSlot} appended to CSV file.`);
 }
@@ -196,6 +199,9 @@ async function analyzePriorityFees(numSamples, batchSize, delay) {
             
             const computeUnits = [];
             let totalNonVotingTransactions = 0;
+            let totalSuccessfulTxs=0;
+            let totalFailedTxs = 0;
+            const priorityFees = [];
             const successPriorityFees = [];
             const failedPriorityFees = [];
             const successComputeUnits = [];
@@ -220,8 +226,12 @@ async function analyzePriorityFees(numSamples, batchSize, delay) {
                         if (meta && meta.fee !== undefined) {
                             totalNonVotingTransactions++; // Count all non-voting txs
                             const feeInSOL = meta.fee / LAMPORTS_PER_SOL;
+                            
                             if (feeInSOL > 0) { // Filter for positive fees
-                                priorityFees.push(feeInSOL); // Track all non-voting txs with fee > 0
+                                priorityFees.push(feeInSOL); 
+                                if (meta.computeUnitsConsumed !== undefined){
+                                    computeUnits.push(meta.computeUnitsConsumed);// Track all non-voting txs with fee > 0
+                                }
                                 if (meta.err === null && meta.computeUnitsConsumed !== undefined) {
                                     // Successful non-voting tx with fee > 0 and CU defined
                                     successPriorityFees.push(feeInSOL);
@@ -242,8 +252,8 @@ async function analyzePriorityFees(numSamples, batchSize, delay) {
                                             case 'rent':
                                                 blockRewards.push(rewardAmount);
                                                 break;
-                                            case 'vote':
-                                            case 'stake':
+                                            case 'voting':
+                                            case 'staking':
                                                 seigniorage.push(rewardAmount);
                                                 break;
                                             default:
@@ -269,11 +279,6 @@ async function analyzePriorityFees(numSamples, batchSize, delay) {
                 continue;
             }
 
-            if (blockRewards.length === 0) {
-                console.log(`No rewards found in the scanned blocks.`);
-                continue;
-            }
-
             
             
            
@@ -288,12 +293,14 @@ async function analyzePriorityFees(numSamples, batchSize, delay) {
             
             //CU analysis
             const sortedComputeUnits = computeUnits.sort((a, b) => a - b);
+            const sortedSuccessCU = successComputeUnits.sort((a,b) => a-b);
             const maxCU = sortedComputeUnits[sortedComputeUnits.length - 1];
             const averageCU = computeUnits.reduce((sum, cu) => sum + cu, 0) / computeUnits.length;
             const medianCU =
                 computeUnits.length % 2 === 0
                     ? (sortedComputeUnits[computeUnits.length / 2 - 1] + sortedComputeUnits[computeUnits.length / 2]) / 2
                     : sortedComputeUnits[Math.floor(computeUnits.length / 2)];
+            const averageSuccessCU = sortedSuccessCU.reduce((sum, cu) => sum + cu, 0)/sortedSuccessCU.length;
             
             //Tx Analysis
             const blockTime = 0.4;
@@ -307,11 +314,14 @@ async function analyzePriorityFees(numSamples, batchSize, delay) {
             const averageSeigniorage = sortedSeigniorage.reduce((sum, seig) => sum + seig, 0 ) / sortedSeigniorage.length;
             
             //CUP Analysis
-            const ComputeUnitPrice = sortedFees.reduce((sum, fee) => sum + fee, 0) / sortedComputeUnits.length;
-            const sortedSuccessFees = successPriorityFees.sort((a,b) => a-b);
-            const sortedSuccessCUs = successComputeUnits.sort((a,b)=>a-b);
-            const ComputeUnitPriceSuccess = sortedSuccessFees.reduce((sum, fee) => sum + fee, 0) / sortedSuccessCUs.length;
-
+            const totalFees = priorityFees.reduce((sum, fee) => sum + fee, 0);
+            const totalSuccessFees = successPriorityFees.reduce((sum, fee) => sum + fee, 0);
+            const totalComputeUnits = computeUnits.reduce((sum, cu) => sum + cu, 0);
+            const totalSuccessCU = successComputeUnits.reduce((sum, cu) => sum + cu, 0);
+            const ComputeUnitPrice = computeUnits.length > 0 ? totalFees / totalComputeUnits : 0;
+            const ComputeUnitPriceSuccess = successComputeUnits.length > 0 ? totalSuccessFees / totalSuccessCU : 0;
+            
+            
             printReport(
                 batchStartSlot,
                 batchStartSlot - (batchSize - 1),
@@ -323,6 +333,7 @@ async function analyzePriorityFees(numSamples, batchSize, delay) {
                 maxCU,
                 averageCU,
                 medianCU,
+                averageSuccessCU,
                 averageBlockRewards,
                 averageSeigniorage,
                 ComputeUnitPrice, 
@@ -341,6 +352,7 @@ async function analyzePriorityFees(numSamples, batchSize, delay) {
                 maxCU,
                 averageCU,
                 medianCU,
+                averageSuccessCU,
                 averageBlockRewards,
                 averageSeigniorage,
                 ComputeUnitPrice,
